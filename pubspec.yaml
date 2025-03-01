@@ -59,6 +59,7 @@ dependencies:
   flutter_svg: ^2.0.17
   flutter_launcher_icons: ^0.14.3
   video_thumbnail: ^0.5.3
+#  wakelock_plus: ^1.2.10
 
 dev_dependencies:
   flutter_test:

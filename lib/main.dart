@@ -52,18 +52,24 @@ import 'package:html/parser.dart' as parser;
 final FirebaseAuth _auth = FirebaseAuth.instance;
 class ThemeNotifier with ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.light;
-  ThemeMode get themeMode => _themeMode;
 
-  Future<void> loadTheme() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    _themeMode = (prefs.getBool('isDarkTheme') ?? false) ? ThemeMode.dark : ThemeMode.light;
-    notifyListeners();
+  ThemeNotifier() {
+    _loadThemeMode();
   }
 
-  void toggleTheme() async {
-    _themeMode = (_themeMode == ThemeMode.light) ? ThemeMode.dark : ThemeMode.light;
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    prefs.setBool('isDarkTheme', _themeMode == ThemeMode.dark);
+  ThemeMode get themeMode => _themeMode; // ✅ Correct getter name
+
+  Future<void> _loadThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final themeString = prefs.getString('themeMode') ?? 'light';
+    _themeMode = themeString == 'light' ? ThemeMode.light : ThemeMode.dark;
+    notifyListeners(); // ✅ Notify listeners after loading theme
+  }
+
+  void toggleTheme() async { // ✅ Use toggleTheme() instead of toggleMode()
+    _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('themeMode', _themeMode == ThemeMode.light ? 'light' : 'dark');
     notifyListeners();
   }
 }
@@ -341,8 +347,9 @@ class ThemeModel with ChangeNotifier {
 
   Future<void> _loadThemeMode() async {
     final prefs = await SharedPreferences.getInstance();
-    final themeString = prefs.getString('themeMode') ?? 'light';
-    _mode = themeString == 'light' ? ThemeMode.light : ThemeMode.dark;
+    _mode = (prefs.getString('themeMode') ?? 'light') == 'light'
+        ? ThemeMode.light
+        : ThemeMode.dark;
   }
 
   Future<void> _saveThemeMode() async {
@@ -985,14 +992,12 @@ class _RegisterPageState extends State<RegisterPage> {
     );
 
     if (response.statusCode == 200) {
-      print(response.body);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Muvaffaqqiyatli ro'yxatdan o'tish!"),
         ),
       );
     } else {
-      print(response.body);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Login yoki parol xato'),
@@ -1099,33 +1104,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
   int currentIndex_gr = 0;
 
-  final List<Map<String, String>> suggestedVideos = [
-    {
-      'title': 'Flutter Tutorial for Beginners',
-      'videoId': 'x0uinJvhNxI',
-      'thumbnail': 'https://img.youtube.com/vi/x0uinJvhNxI/hqdefault.jpg'
-    },
-    {
-      'title': 'Dart Programming Basics',
-      'videoId': 'Ej_Pcr4uC2Q',
-      'thumbnail': 'https://img.youtube.com/vi/Ej_Pcr4uC2Q/hqdefault.jpg'
-    },
-    {
-      'title': 'Dart Programming Basics',
-      'videoId': 'Ej_Pcr4uC2Q',
-      'thumbnail': 'https://img.youtube.com/vi/Ej_Pcr4uC2Q/hqdefault.jpg'
-    },
-    {
-      'title': 'Dart Programming Basics',
-      'videoId': 'Ej_Pcr4uC2Q',
-      'thumbnail': 'https://img.youtube.com/vi/Ej_Pcr4uC2Q/hqdefault.jpg'
-    },
-    {
-      'title': 'Dart Programming ds',
-      'videoId': 'Ej_Pcr4uC2Q',
-      'thumbnail': 'https://img.youtube.com/vi/Ej_Pcr4uC2Q/hqdefault.jpg'
-    },
-  ];
+  List<Map<String, String>> suggestedVideos = [];
+
+  void loadVideos() async {
+    suggestedVideos = await fetchSuggestedVideos();
+    setState(() {}); // Refresh UI after fetching data
+  }
 
   @override
   void initState() {
@@ -1133,9 +1117,26 @@ class _MyHomePageState extends State<MyHomePage> {
     _checkInternetConnection();
     _fetchData();
     fetchImageData();
+    loadVideos();
+  }
+
+  Future<List<Map<String, String>>> fetchSuggestedVideos() async {
+    final response = await http.get(Uri.parse('https://hbnnarzullayev.pythonanywhere.com/suggested_videos'));
+
+    if (response.statusCode == 200) {
+      List<dynamic> data = json.decode(response.body);
+      return data.map((video) => {
+        'title': video['title'].toString(),  // Convert to String
+        'videoId': video['videoId'].toString(),
+        'thumbnail': video['thumbnail'].toString(),
+      }).toList();
+    } else {
+      throw Exception('Failed to load suggested videos');
+    }
   }
 
   Future<void> _fetchData() async {
+    fetchSuggestedVideos();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final username = authProvider.username;
 
@@ -1470,13 +1471,13 @@ class _MyHomePageState extends State<MyHomePage> {
                 children: [
                   Row(
                     children: [
-                      const Text(
-                        "Tavsiya etilgan videolar",
+                      TextButton(child: Text("Tavsiya etilgan videolar",
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: Colors.teal,
-                        ),
+                        ),),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => VideoListScreen())),
                       ),
                       IconButton(
                         icon: const Icon(Icons.navigate_next),
@@ -1491,6 +1492,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       itemCount: suggestedVideos.length,
                       itemBuilder: (context, index) {
                         final video = suggestedVideos[index];
+                        print(video);
                         return GestureDetector(
                           onTap: () {
                             Navigator.push(
@@ -1565,6 +1567,9 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildDrawer(AuthProvider authProvider, ThemeNotifier themeProvider) {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final dynamic userId = userProvider.userrole;
+    print(userId);
     return SizedBox(
       width: MediaQuery.of(context).size.width * 0.5,
       child: Drawer(
@@ -1618,7 +1623,17 @@ class _MyHomePageState extends State<MyHomePage> {
               ListTile(
                 leading: const Icon(Icons.verified_user),
                 title: const Text('Profil', style: TextStyle(color: Colors.blue)),
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => SignInPage())),
+                onTap: () {
+                  // Replace this with your actual user ID check
+                  final bool isLoggedIn = userId != null && userId.isNotEmpty;
+
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => isLoggedIn ? Profilepage() : SignInPage(),
+                    ),
+                  );
+                },
               ),
               ListTile(
                 leading: const Icon(Icons.verified_user),
@@ -1626,12 +1641,18 @@ class _MyHomePageState extends State<MyHomePage> {
                 onTap: _logout,
               ),
               ListTile(
-                leading: Icon(themeProvider.themeMode == ThemeMode.light ? Icons.nights_stay_outlined : Icons.wb_sunny_outlined),
+                leading: Icon(
+                  themeProvider.themeMode == ThemeMode.light
+                      ? Icons.nights_stay_outlined
+                      : Icons.wb_sunny_outlined,
+                ),
                 title: Text(
                   themeProvider.themeMode == ThemeMode.light ? "Tungi rejim" : "Kunduzgi rejim",
-                  style: TextStyle(color: themeProvider.themeMode == ThemeMode.light ? Colors.blueAccent : Colors.white),
+                  style: TextStyle(
+                    color: themeProvider.themeMode == ThemeMode.light ? Colors.blueAccent : Colors.white,
+                  ),
                 ),
-                onTap: () => themeProvider.toggleTheme(),
+                onTap: () => themeProvider.toggleTheme(), // ✅ Corrected method name
               ),
               const AboutListTile(
                 icon: Icon(Icons.info),
@@ -1797,53 +1818,12 @@ class Profilepage extends StatefulWidget {
   State<Profilepage> createState() => _Profilepage();
 }
 
-Future<void> fetchScore(BuildContext context) async {
-  final authProvider = Provider.of<AuthProvider>(context, listen: false);
-  try {
-    final url =
-    Uri.parse('https://hbnnarzullayev.pythonanywhere.com/users_scores');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'nms': authProvider.username,
-        'app': 2,
-      }),
-    );
-
-    if (response.statusCode == 200) {
-      final Map<String, dynamic> data = json.decode(response.body);
-      int score = data['last_score'];
-      final summscore = data['summ_score'];
-      final countscore = data['count_score'];
-
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      prefs.setString('userToken', 'your_token_here');
-
-      // Update the authProvider here
-      authProvider.fetchScore(context);
-      authProvider.setscore(score);
-
-      // Show a success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Muvaffaqqiyatli yangilandi!'),
-        ),
-      );
-    } else {
-      print(
-          'Xato. Internet yoq yoki test topshirilmagan: ${response.statusCode}');
-    }
-  } catch (error) {
-    print('Error: $error');
-  }
-}
 
 class _Profilepage extends State<Profilepage> {
+  bool isAdmins =false;
   void initState() {
     super.initState();
     // Call fetchScore when the app is loaded
-    fetchScore(context);
   }
 
   File? _image;
@@ -2128,6 +2108,9 @@ class _Profilepage extends State<Profilepage> {
 
   @override
   Widget build(BuildContext context) {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final dynamic isAdminValues = userProvider.userrole;
+    isAdmins = isAdminValues == 'Admin'; // Corrected role-check logic
     final model = Provider.of<ThemeModel>(context);
     final authProvider = Provider.of<AuthProvider>(context);
     return Scaffold(
@@ -2138,7 +2121,6 @@ class _Profilepage extends State<Profilepage> {
           IconButton(
             icon: const Icon(Icons.refresh_outlined),
             onPressed: () {
-              fetchScore(context); // Call the logout function
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Test natijalari yangilanmoqda!'),
@@ -2164,35 +2146,24 @@ class _Profilepage extends State<Profilepage> {
                 color: Colors.black38,
               ),
               accountName: Text(
-                authProvider.username == null || authProvider.username.isEmpty
-                    ? 'MEHMON'
-                    : authProvider.username,
+                userProvider.username?.isNotEmpty == true ? userProvider.username! : 'MEHMON',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                 ),
               ),
               accountEmail: Text(
-                authProvider.email,
+                userProvider.userphone?.isNotEmpty == true ? userProvider.userphone! : '+123456789',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              currentAccountPicture: Container(
-                height: 100,
-                width: 100,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.all(
-                    Radius.circular(40),
-                  ),
+              currentAccountPicture:
+              CircleAvatar(
+                backgroundImage: NetworkImage(
+                  'https://hbnnarzullayev.pythonanywhere.com/static/Image/${userProvider.username}.jpg',
                 ),
-                child: Image.network(
-                  authProvider.username == null || authProvider.username.isEmpty
-                      ? 'assets/images/default.jpg'
-                      : 'https://hbnnarzullayev.pythonanywhere.com/static/Image/${authProvider.username}.jpg',
-                  errorBuilder: (context, error, stackTrace) {
-                    return Image.asset('assets/images/default.png');
-                  },
-                ),
+                onBackgroundImageError: (_, __) {},
+                child: Image.asset('assets/images/default.png'), // Fallback image
               ),
             ),
             Container(
@@ -2298,36 +2269,6 @@ class _Profilepage extends State<Profilepage> {
                 },
               ),
             ),
-            Container(
-              decoration: BoxDecoration(color: Colors.black38),
-              child: ListTile(
-                leading: Icon(
-                  Icons.query_stats,
-                  color: model.mode == ThemeMode.light
-                      ? Colors.white
-                      : Colors.lightBlueAccent,
-                ),
-                title: Text(
-                  'Natijalarim',
-                  style: TextStyle(
-                    color: model.mode == ThemeMode.light
-                        ? Colors.white
-                        : Colors.lightBlueAccent,
-                  ),
-                ),
-                onTap: () {
-                  _showMineOrStudentsDialog(context);
-                },
-              ),
-            ),
-            if (authProvider.isTeacher()) ...[
-              ElevatedButton(
-                onPressed: () async {
-                  await fetchStudentScores();
-                },
-                child: const Text('Talabalar natijalarini yuklash'),
-              ),
-            ],
             const Padding(padding: EdgeInsets.only(top: 10)),
           ],
         ),
